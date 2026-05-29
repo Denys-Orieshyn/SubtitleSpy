@@ -13,6 +13,8 @@ DEFAULT_SYSTEM_PROMPT = (
     "You translate subtitles into Russian and briefly explain idioms, slang, "
     "or domain-specific terms when it helps understanding. Keep the answer concise."
 )
+DEFAULT_GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions"
+DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,7 +27,7 @@ class LLMResponse:
 
 
 class LLMClient:
-    """OpenAI-compatible synchronous chat client.
+    """Groq/OpenAI-compatible synchronous chat client.
 
     The client keeps a small in-memory cache keyed by MD5 of the source text.
     Repeated calls with the same subtitle text return the cached answer without
@@ -36,8 +38,8 @@ class LLMClient:
         self,
         *,
         api_key: str | None = None,
-        model: str = "gpt-4o-mini",
-        base_url: str = "https://api.openai.com/v1/chat/completions",
+        model: str = DEFAULT_GROQ_MODEL,
+        base_url: str = DEFAULT_GROQ_CHAT_COMPLETIONS_URL,
         timeout: float = 30.0,
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
         cache_size: int = 128,
@@ -47,7 +49,7 @@ class LLMClient:
         if cache_size < 1:
             raise ValueError("cache_size must be at least 1")
 
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.api_key = api_key or os.getenv("GROQ_API_KEY")
         self.model = model
         self.base_url = base_url
         self.system_prompt = system_prompt
@@ -82,7 +84,7 @@ class LLMClient:
 
         if not self.api_key:
             raise RuntimeError(
-                "LLM API key is not configured. Pass api_key=... or set OPENAI_API_KEY."
+                "LLM API key is not configured. Pass api_key=... or set GROQ_API_KEY."
             )
 
         payload = self._build_payload(
