@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QPoint, Qt
 from PyQt6.QtGui import QFont, QGuiApplication
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
@@ -30,10 +30,12 @@ class OverlayWindow(QWidget):
         self._ocr_engine = ocr_engine
         self._llm_client = llm_client
         self._worker: TranslationWorker | None = None
+        self._drag_position: QPoint | None = None
+        self._manual_position = False
 
         self._configure_window()
         self._build_label()
-        self._place_near_bottom()
+        self._resize_and_position()
 
     def request_translation(self) -> None:
         """Start a translation job if one is not already running."""
@@ -57,16 +59,14 @@ class OverlayWindow(QWidget):
     def show_message(self, text: str) -> None:
         self._label.setText(text)
         self._label.setStyleSheet(_label_stylesheet(border_color="rgba(0, 190, 255, 170)"))
-        self.adjustSize()
-        self._place_near_bottom()
+        self._resize_and_position()
         self.show()
         self.raise_()
 
     def show_error(self, text: str) -> None:
         self._label.setText(f"Ошибка: {text}")
         self._label.setStyleSheet(_label_stylesheet(border_color="rgba(255, 90, 90, 180)"))
-        self.adjustSize()
-        self._place_near_bottom()
+        self._resize_and_position()
         self.show()
         self.raise_()
 
@@ -82,6 +82,36 @@ class OverlayWindow(QWidget):
             self.close()
             return
         super().keyPressEvent(event)
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+            return
+        if event.button() == Qt.MouseButton.RightButton:
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        if self._drag_position is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_position)
+            self._manual_position = True
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        if event.button() == Qt.MouseButton.RightButton:
+            self.hide()
+            event.accept()
+            return
+        if event.button() == Qt.MouseButton.LeftButton and self._drag_position is not None:
+            self._drag_position = None
+            self._manual_position = True
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         if event.button() == Qt.MouseButton.LeftButton:
@@ -117,8 +147,14 @@ class OverlayWindow(QWidget):
         self._label.setMaximumWidth(860)
         self._label.setMinimumHeight(64)
         self._label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self._label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self._label.setStyleSheet(_label_stylesheet(border_color="rgba(0, 190, 255, 170)"))
         layout.addWidget(self._label)
+
+    def _resize_and_position(self) -> None:
+        self.adjustSize()
+        if not self._manual_position:
+            self._place_near_bottom()
 
     def _place_near_bottom(self) -> None:
         screen = QGuiApplication.primaryScreen()
